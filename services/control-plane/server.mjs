@@ -230,8 +230,8 @@ const server = http.createServer(async (req, res) => {
     // Git Branches tab — status, last 4 diffs, feed to agent, and rollback
     if (p === "/api/git/status" && req.method === "GET") {
       const state = store.get();
-      const repoUrl = state.codebase?.repoUrl;
-      const token = state.codebase?.githubToken;
+      const repoUrl = state.codebase?.repoUrl || config.GITHUB_REPO;
+      const token = state.codebase?.githubToken || config.GITHUB_TOKEN;
       if (!repoUrl || !token) {
         return ok(res, { configured: false });
       }
@@ -241,8 +241,8 @@ const server = http.createServer(async (req, res) => {
 
     if (p === "/api/git/feed-agent" && req.method === "POST") {
       const state = store.get();
-      const repoUrl = state.codebase?.repoUrl;
-      const token = state.codebase?.githubToken;
+      const repoUrl = state.codebase?.repoUrl || config.GITHUB_REPO;
+      const token = state.codebase?.githubToken || config.GITHUB_TOKEN;
       if (!repoUrl || !token) {
         return fail(res, 400, "GitHub repository URL and PAT must be configured first");
       }
@@ -268,8 +268,8 @@ const server = http.createServer(async (req, res) => {
 
     if (p === "/api/git/rollback" && req.method === "POST") {
       const state = store.get();
-      const repoUrl = state.codebase?.repoUrl;
-      const token = state.codebase?.githubToken;
+      const repoUrl = state.codebase?.repoUrl || config.GITHUB_REPO;
+      const token = state.codebase?.githubToken || config.GITHUB_TOKEN;
       if (!repoUrl || !token) {
         return fail(res, 400, "GitHub repository URL and PAT must be configured first");
       }

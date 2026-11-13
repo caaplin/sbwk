@@ -19,6 +19,8 @@ export const config = {
   DATA_DIR: str(env.DATA_DIR, undefined),
   REQUEST_TIMEOUT_MS: num(env.REQUEST_TIMEOUT_MS, 6000),
   GITHUB_API_BASE: str(env.GITHUB_API_BASE, "https://api.github.com"),
+  GITHUB_TOKEN: str(env.GITHUB_TOKEN, ""),
+  GITHUB_REPO: str(env.GITHUB_REPO, ""),
 	CONTROL_PLANE_PASSWORD: str(env.CONTROL_PLANE_PASSWORD, ""),
 
   // Downstream services the control plane configures.
