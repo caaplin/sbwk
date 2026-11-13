@@ -44,9 +44,17 @@ services:
       NODE_ENV: production
       PORT: "4200"
       AGENT_CORE_TOKEN: ${AGENT_CORE_TOKEN}
-      AGENT_MODE: ${AGENT_MODE:-mock}
+      AGENT_MODE: ${AGENT_MODE:-}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
-      GROQ_MODEL: ${GROQ_MODEL:-llama-3.3-70b-versatile}
+      GROQ_MODEL: ${GROQ_MODEL:-}
+      GROQ_BASE_URL: ${GROQ_BASE_URL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
       CONNECTOR_URL: http://agent-connector:4100
       CONNECTOR_API_TOKEN: ${CONNECTOR_API_TOKEN}
       INVESTIGATE_SERVICES: database,auth,external_api

@@ -99,11 +99,12 @@ export function deriveDependencyFindings(investigation) {
 export const hasUnreachableDependency = findings => findings.some(f => f.status === "unreachable");
 export const unhealthyServices = findings => findings.filter(f => ["unhealthy", "unreachable", "degraded"].includes(f.status));
 
-const fix = (title, description, kind, file) => ({
+const fix = (title, description, kind, file, patch) => ({
   title,
   description,
   kind: VALID_FIX_KINDS.has(kind) ? kind : "investigation",
-  ...(sanitizeFixFile(file) ? { file: sanitizeFixFile(file) } : {})
+  ...(sanitizeFixFile(file) ? { file: sanitizeFixFile(file) } : {}),
+  ...(typeof patch === "string" && patch.trim() ? { patch: patch.slice(0, 1200) } : {})
 });
 
 function correlateCommit(incident, codeFindings, recentCommits) {
@@ -302,7 +303,8 @@ const SYSTEM_PROMPT = [
   "Respond with ONLY a JSON object (no markdown) with keys:",
   "severity (low|medium|high|critical), summary (string),",
   "rootCause {summary, confidence 0..1}, confidence (0..1),",
-  "suggestedFixes (array of {title, description, kind: config|code|dependency|investigation, file?}),",
+  "suggestedFixes (array of {title, description, kind: config|code|dependency|investigation, file?, patch?}),",
+  "where patch (optional string) provides a concrete minimal code change based on codeFindings snippets when applicable,",
   "reasoning (string). Prefer dependency root causes when a dependency is unhealthy."
 ].join(" ");
 
@@ -320,7 +322,8 @@ function sanitizeLlmOutput(v, input) {
       String(f.title).slice(0, 160),
       String(f.description || "").slice(0, 600),
       f.kind,
-      f.file
+      f.file,
+      f.patch
     ));
 
   const findings = deriveDependencyFindings(input.dependency);

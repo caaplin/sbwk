@@ -1,13 +1,27 @@
-// Zero-dependency config. Optionally loads a local .env (KEY=VALUE) if present.
+// Zero-dependency config. Loads service .env and repo-root .env (KEY=VALUE) if present.
 import fs from "node:fs";
 
-try {
-  const txt = fs.readFileSync(new URL("./.env", import.meta.url), "utf8");
-  for (const line of txt.split("\n")) {
-    const m = line.match(/^\s*([A-Za-z0-9_]+)\s*=\s*(.*?)\s*$/);
-    if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2];
-  }
-} catch { /* no .env */ }
+function loadEnvFile(relPath) {
+  try {
+    const txt = fs.readFileSync(new URL(relPath, import.meta.url), "utf8");
+    for (const rawLine of txt.split(/\r?\n/)) {
+      const trimmed = rawLine.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const m = trimmed.match(/^([A-Za-z0-9_]+)\s*=\s*(.*)$/);
+      if (!m || process.env[m[1]] !== undefined) continue;
+      let val = m[2].trim();
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1);
+      } else {
+        val = val.replace(/\s+#.*$/, "").trim();
+      }
+      process.env[m[1]] = val;
+    }
+  } catch { /* optional .env */ }
+}
+
+loadEnvFile("./.env");
+loadEnvFile("../../.env");
 
 const env = process.env;
 const num = (v, d) => (v !== undefined && v !== "" && Number.isFinite(Number(v)) ? Number(v) : d);
@@ -28,14 +42,52 @@ export function isWeakToken(token) {
   return false;
 }
 
+function resolveLlmConfig() {
+  const groqKey = str(env.GROQ_API_KEY, undefined);
+  const openaiKey = str(env.OPENAI_API_KEY, undefined);
+  const openrouterKey = str(env.OPENROUTER_API_KEY, undefined);
+  const genericKey = str(env.LLM_API_KEY, undefined);
+  const apiKey = groqKey || genericKey || openaiKey || openrouterKey;
+
+  const explicitBase = str(env.LLM_BASE_URL, str(env.GROQ_BASE_URL, str(env.OPENAI_BASE_URL, undefined)));
+  const explicitModel = str(env.LLM_MODEL, str(env.GROQ_MODEL, str(env.OPENAI_MODEL, undefined)));
+
+  if (!groqKey && (openrouterKey || (apiKey && apiKey.startsWith("sk-or-")))) {
+    return {
+      apiKey,
+      baseUrl: explicitBase || "https://openrouter.ai/api/v1",
+      model: explicitModel || "meta-llama/llama-3.3-70b-instruct"
+    };
+  }
+  if (!groqKey && (openaiKey || (apiKey && apiKey.startsWith("sk-") && !apiKey.startsWith("gsk_")))) {
+    return {
+      apiKey,
+      baseUrl: explicitBase || "https://api.openai.com/v1",
+      model: explicitModel || "gpt-4o-mini"
+    };
+  }
+  return {
+    apiKey,
+    baseUrl: explicitBase || "https://api.groq.com/openai/v1",
+    model: explicitModel || "llama-3.3-70b-versatile"
+  };
+}
+
+const llm = resolveLlmConfig();
+const rawAgentMode = str(env.AGENT_MODE, undefined)?.toLowerCase();
+// Auto-enable "live" if an LLM API key is provided and AGENT_MODE wasn't explicitly set to "mock".
+const resolvedAgentMode = rawAgentMode === "live"
+  ? "live"
+  : (rawAgentMode === "mock" ? "mock" : (llm.apiKey ? "live" : "mock"));
+
 export const config = {
   NODE_ENV: str(env.NODE_ENV, "development"),
   PORT: num(env.PORT, 4200),
   AGENT_CORE_TOKEN: str(env.AGENT_CORE_TOKEN, "development-only-change-this-agent-token-123456"),
-  AGENT_MODE: env.AGENT_MODE === "live" ? "live" : "mock",
-  GROQ_API_KEY: str(env.GROQ_API_KEY, undefined),
-  GROQ_MODEL: str(env.GROQ_MODEL, "llama-3.3-70b-versatile"),
-  GROQ_BASE_URL: str(env.GROQ_BASE_URL, "https://api.groq.com/openai/v1"),
+  AGENT_MODE: resolvedAgentMode,
+  GROQ_API_KEY: llm.apiKey,
+  GROQ_MODEL: llm.model,
+  GROQ_BASE_URL: llm.baseUrl,
   LLM_TIMEOUT_MS: num(env.LLM_TIMEOUT_MS, 20000),
   LLM_MAX_RETRIES: num(env.LLM_MAX_RETRIES, 1),
   WAIT_TIMEOUT_MS: num(env.WAIT_TIMEOUT_MS, 8000),

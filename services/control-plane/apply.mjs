@@ -117,7 +117,7 @@ export async function applyExternal(state, cfg = defaultConfig) {
   if (!Object.keys(services).length) {
     return { ok: true, skipped: "no valid endpoints configured to push" };
   }
-  const res = await post(`${cfg.CONNECTOR_URL}/connector/config`, cfg.CONNECTOR_API_TOKEN, { services }, cfg.REQUEST_TIMEOUT_MS);
+  const res = await post(`${cfg.CONNECTOR_URL}/connector/config`, cfg.CONNECTOR_API_TOKEN, { mode: "live", services }, cfg.REQUEST_TIMEOUT_MS);
   return { ...res, mapping };
 }
 

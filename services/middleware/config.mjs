@@ -2,10 +2,20 @@
 import fs from "node:fs";
 
 try {
-  const txt = fs.readFileSync(new URL("./.env", import.meta.url), "utf8");
-  for (const line of txt.split("\n")) {
-    const m = line.match(/^\s*([A-Za-z0-9_]+)\s*=\s*(.*?)\s*$/);
-    if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2];
+  for (const rel of ["./.env", "../../.env"]) {
+    try {
+      const txt = fs.readFileSync(new URL(rel, import.meta.url), "utf8");
+      for (const rawLine of txt.split(/\r?\n/)) {
+        const trimmed = rawLine.trim();
+        if (!trimmed || trimmed.startsWith("#")) continue;
+        const m = trimmed.match(/^([A-Za-z0-9_]+)\s*=\s*(.*)$/);
+        if (!m || process.env[m[1]] !== undefined) continue;
+        let val = m[2].trim();
+        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) val = val.slice(1, -1);
+        else val = val.replace(/\s+#.*$/, "").trim();
+        process.env[m[1]] = val;
+      }
+    } catch { /* optional .env */ }
   }
 } catch { /* no .env */ }
 
