@@ -495,40 +495,52 @@
     const metaEl = document.getElementById('git-repo-meta');
     if (!msgEl || !branchesEl || !diffsEl) return;
 
-    msgEl.textContent = 'Loading git status…';
+    msgEl.innerHTML = '<span class="muted">Loading git status from GitHub…</span>';
     try {
       const data = await api('/api/git/status');
       if (!data.configured) {
-        msgEl.textContent = 'Configure GitHub Repository & PAT in the Config tab first.';
+        msgEl.innerHTML = `<div style="padding:10px 12px;border:1px solid #f59e0b;background:#fffbeb;border-radius:6px;color:#92400e;">
+          <strong>GitHub not configured:</strong> Set <code>GITHUB_REPO</code> and <code>GITHUB_TOKEN</code> in <code>.env</code>, or save them in the <strong>Config</strong> tab.
+        </div>`;
         branchesEl.innerHTML = '';
         diffsEl.innerHTML = '';
         return;
       }
       if (!data.ok) {
-        msgEl.textContent = data.error || 'Failed to load git status.';
+        msgEl.innerHTML = `<div style="padding:10px 12px;border:1px solid #ef4444;background:#fef2f2;border-radius:6px;color:#991b1b;">
+          <strong>GitHub API Error:</strong> ${esc(data.error || 'Unknown error')}
+        </div>`;
+        branchesEl.innerHTML = '';
+        diffsEl.innerHTML = '';
         return;
       }
       if (metaEl && data.repo) {
         metaEl.textContent = `${data.repo.fullName} (default branch: ${data.repo.defaultBranch})`;
       }
-      msgEl.textContent = `Loaded ${data.branches?.length || 0} branch(es) and last ${data.diffs?.length || 0} commit diff(s).`;
+      msgEl.innerHTML = `<span class="muted">Connected to <strong>${esc(data.repo?.fullName || '')}</strong> · ${data.branches?.length || 0} branch(es) · last ${data.diffs?.length || 0} commit(s)</span>`;
 
-      branchesEl.innerHTML = `<h3 style="margin:0 0 8px;font-size:14px;">Branches</h3>` +
+      branchesEl.innerHTML = `<h3 style="margin:0 0 8px;font-size:14px;">Branches</h3>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">` +
         (data.branches || []).map(b =>
-          `<span class="badge" style="margin:0 6px 6px 0;">${esc(b.name)} <code>${esc(b.sha)}</code>${b.protected ? ' (protected)' : ''}</span>`
-        ).join('');
+          `<div style="padding:6px 10px;border:1px solid var(--hair);border-radius:6px;background:var(--bg);font-size:12px;">
+            <strong>${esc(b.name)}</strong> <code style="margin-left:4px;">${esc(b.sha)}</code>${b.protected ? ' <span class="badge">protected</span>' : ''}
+          </div>`
+        ).join('') + `</div>`;
 
-      diffsEl.innerHTML = `<h3 style="margin:0 0 8px;font-size:14px;">Last ${data.diffs?.length || 0} Commit Diffs</h3>` +
-        (data.diffs || []).map(d => {
+      diffsEl.innerHTML = `<h3 style="margin:12px 0 8px;font-size:14px;">Commit History &amp; Diffs (Last ${data.diffs?.length || 0})</h3>` +
+        (data.diffs || []).map((d, idx) => {
           const filesHtml = (d.files || []).map(f =>
-            `<details style="margin:4px 0;"><summary><code>${esc(f.filename)}</code> (${esc(f.status)}, +${f.additions}/-${f.deletions})</summary><pre style="overflow:auto;max-height:220px;font-size:11px;padding:8px;background:var(--hair);border-radius:4px;">${esc(f.patch || 'No patch available')}</pre></details>`
+            `<details ${idx === 0 ? 'open' : ''} style="margin:4px 0;">
+              <summary style="cursor:pointer;font-size:12px;"><code>${esc(f.filename)}</code> <span class="muted">(${esc(f.status)}, +${f.additions}/-${f.deletions})</span></summary>
+              <pre style="overflow:auto;max-height:220px;font-size:11px;padding:8px;background:var(--hair);border-radius:4px;margin-top:4px;">${esc(f.patch || 'No patch available')}</pre>
+            </details>`
           ).join('');
-          return `<div class="card" style="margin-bottom:10px;padding:10px 12px;">
+          return `<div class="card" style="margin-bottom:10px;padding:12px;">
             <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
               <div><code>${esc(d.shortSha)}</code> <strong>${esc(d.message)}</strong> <span class="muted">by ${esc(d.author)}</span></div>
               <button type="button" class="btn git-rollback-btn" data-sha="${esc(d.sha)}" data-branch="${esc(data.repo?.defaultBranch || 'main')}">Rollback to Parent</button>
             </div>
-            <div style="margin-top:6px;">${filesHtml || '<span class="muted">No file diffs</span>'}</div>
+            <div style="margin-top:8px;">${filesHtml || '<span class="muted">No file diffs</span>'}</div>
           </div>`;
         }).join('');
 
