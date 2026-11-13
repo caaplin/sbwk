@@ -6,7 +6,7 @@
   "description": "SBWK (Sleepy Bot with Keys) — zero-dependency anomaly-detecting middleware with an AI diagnosing agent",
   "scripts": {
     "test": "npm --prefix services/agent-connector test && npm --prefix services/middleware test && npm --prefix services/agent-core test && npm --prefix services/control-plane test",
-    "check": "node --check services/agent-connector/server.mjs && node --check services/middleware/server.mjs && node --check services/agent-core/server.mjs && node --check services/control-plane/server.mjs && node --check services/dummy-server/server.mjs",
+    "check": "node --check services/agent-connector/server.mjs && node --check services/middleware/server.mjs && node --check services/agent-core/server.mjs && node --check services/control-plane/server.mjs && node --check services/dummy-server/server.mjs && node --check demo/run-demo.mjs && node --check demo/run-stack.mjs",
     "demo": "node demo/run-demo.mjs",
     "stack": "node demo/run-stack.mjs"
   },

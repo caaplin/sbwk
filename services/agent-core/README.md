@@ -101,7 +101,7 @@ See `.env.example`. Key settings:
 | `CONNECTOR_URL` | `http://localhost:4100` | Agent Connector base URL |
 | `CONNECTOR_API_TOKEN` | dev token | Shared secret with the connector |
 | `CODEBASE_PATH` | — | Read-only source tree to inspect |
-| `ESCALATION_CONFIDENCE_THRESHOLD` | `0.5` | Below this confidence, escalate |
+| `ESCALATION_CONFIDENCE_THRESHOLD` | `0.8` | Below this confidence, escalate |
 | `NOTIFICATION_WEBHOOK_URL` | — | Optional webhook (e.g. Slack); always logged |
 | `DATA_DIR` | — | Persist context here (empty = in-memory) |
 

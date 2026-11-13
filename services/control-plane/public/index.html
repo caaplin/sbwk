@@ -387,9 +387,9 @@
       <div class="space-y-12">
         <div class="flex items-start justify-between gap-8">
           <div>
-            <div class="text-base font-bold uppercase mb-2">Dry-run mode</div>
+            <div class="text-base font-bold uppercase mb-2">Dry-run mode <span class="text-[10px] text-neutral-400">(enforced in v0.1)</span></div>
             <p class="text-xs font-bold text-neutral-500 leading-relaxed max-w-sm">
-              The agent suggests actions. It does not execute them. You approve manually.
+              The agent is strictly read-only: it diagnoses and suggests actions, never executing them automatically.
             </p>
           </div>
           <button id="toggle-dryrun" class="toggle" role="switch" aria-checked="true" aria-label="Dry-run mode">
@@ -399,9 +399,9 @@
 
         <div class="flex items-start justify-between gap-8">
           <div>
-            <div class="text-base font-bold uppercase mb-2">Auto-rollback on failure</div>
+            <div class="text-base font-bold uppercase mb-2">Auto-rollback policy <span class="text-[10px] text-neutral-400">(policy metadata)</span></div>
             <p class="text-xs font-bold text-neutral-500 leading-relaxed max-w-sm">
-              If a fix fails to resolve the error within 60 seconds, revert the change.
+              Recorded in incident policy metadata for downstream remediation runners (no automated changes are executed in v0.1).
             </p>
           </div>
           <button id="toggle-rollback" class="toggle" role="switch" aria-checked="true" aria-label="Auto-rollback on failure">
@@ -451,13 +451,33 @@
 <script>
   /* ---------- REAL BACKEND WIRING (no fake timeouts) ---------- */
   const $ = id => document.getElementById(id);
+  const getAuthHeaders = () => {
+    const tok = sessionStorage.getItem('sbwk_cp_token') || '';
+    return tok ? { Authorization: 'Bearer ' + tok } : {};
+  };
   const api = async (path, body) => {
-    const res = await fetch(path, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : undefined);
+    const headers = { ...getAuthHeaders(), ...(body ? { 'Content-Type': 'application/json' } : {}) };
+    const res = await fetch(path, body ? { method: 'POST', headers, body: JSON.stringify(body) } : { headers });
     const data = await res.json().catch(() => ({}));
+    if (res.status === 401 && data.authRequired) {
+      const entered = window.prompt('Control plane bearer token required (CONTROL_PLANE_TOKEN):');
+      if (entered && entered.trim()) {
+        sessionStorage.setItem('sbwk_cp_token', entered.trim());
+        const retryHeaders = { ...getAuthHeaders(), ...(body ? { 'Content-Type': 'application/json' } : {}) };
+        const retry = await fetch(path, body ? { method: 'POST', headers: retryHeaders, body: JSON.stringify(body) } : { headers: retryHeaders });
+        const retryData = await retry.json().catch(() => ({}));
+        if (!retry.ok || retryData.success === false) throw new Error(retryData.error || ('HTTP ' + retry.status));
+        return retryData;
+      }
+    }
     if (!res.ok || data.success === false) throw new Error(data.error || ('HTTP ' + res.status));
     return data;
   };
   const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const safeHref = raw => {
+    if (typeof raw !== 'string' || !raw.startsWith('https://')) return null;
+    try { const u = new URL(raw); return u.protocol === 'https:' ? u.toString() : null; } catch { return null; }
+  };
   const setStatus = (el, text, ok) => { el.textContent = text; el.classList.toggle('text-neutral-400', !ok); el.classList.toggle('text-black', ok); };
 
   function toggleMobileNav() { $('mobileNav').classList.toggle('hidden'); document.body.classList.toggle('overflow-hidden'); }
@@ -485,8 +505,9 @@
     try {
       await api('/api/external', { authEndpoint: $('auth-endpoint').value.trim(), apiKey: $('api-key').value, databaseEndpoint: $('db-endpoint').value.trim() });
       const r = await api('/api/external/test', {});
-      const detail = `auth:${r.auth.reachable ? 'OK' : 'FAIL'} db:${r.database.reachable ? 'OK' : 'FAIL'}`;
-      setStatus(s, `> [${r.reachable === r.total ? 'OK' : 'WARN'}] ${r.reachable}/${r.total} SERVICES REACHABLE (${detail})`, r.reachable > 0);
+      const authTag = r.auth.reachable ? `OK/${r.auth.method || 'probe'}` : `FAIL:${r.auth.error || 'down'}`;
+      const dbTag = r.database.reachable ? `OK/${r.database.method || 'probe'}` : `FAIL:${r.database.error || 'down'}`;
+      setStatus(s, `> [${r.reachable === r.total ? 'OK' : 'WARN'}] ${r.reachable}/${r.total} SERVICES REACHABLE (auth:${authTag} db:${dbTag})`, r.reachable > 0);
     } catch (e) { setStatus(s, '> [ERROR] ' + e.message, false); }
     finally { btn.disabled = false; }
   });
@@ -523,7 +544,17 @@
       if (!r.incidents.length) { feed.innerHTML = '<div class="text-[11px] font-bold text-neutral-500">// no incidents yet — trigger one via the edge (e.g. /status/500)</div>'; return; }
       feed.innerHTML = r.incidents.map(rec => {
         const a = rec.analysis;
-        return `<div class="bg-white text-black p-4 text-xs font-bold"><div class="flex justify-between gap-4"><span>${escapeHtml(rec.incident.method)} ${escapeHtml(rec.incident.path)} → ${rec.incident.statusCode}</span><span>${a ? a.severity.toUpperCase() : rec.status}</span></div>${a ? `<div class="mt-1 text-neutral-600">${escapeHtml(a.rootCause.summary)}</div><div class="mt-1 text-[10px] text-neutral-400">confidence ${(a.confidence * 100).toFixed(0)}% · ${a.escalate ? 'ESCALATED' : 'auto'}</div>` : ''}</div>`;
+        const fixesHtml = a && Array.isArray(a.suggestedFixes) && a.suggestedFixes.length
+          ? `<div class="mt-2 pt-2 border-t border-neutral-200 space-y-1">${a.suggestedFixes.slice(0, 2).map(f => {
+              const href = safeHref(f.file);
+              const fileRef = href
+                ? ` <a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" class="underline">[commit]</a>`
+                : (f.file ? ` <code class="bg-neutral-100 px-1">${escapeHtml(f.file)}</code>` : '');
+              return `<div class="text-[11px] text-neutral-700">→ ${escapeHtml(f.title)}${fileRef}</div>`;
+            }).join('')}</div>`
+          : '';
+        const modeTag = a ? (a.degradedFromLive ? 'heuristic (live fallback)' : a.mode) : '';
+        return `<div class="bg-white text-black p-4 text-xs font-bold"><div class="flex justify-between gap-4"><span>${escapeHtml(rec.incident.method)} ${escapeHtml(rec.incident.path)} → ${rec.incident.statusCode}</span><span>${a ? escapeHtml(a.severity.toUpperCase()) : escapeHtml(rec.status)}</span></div>${a ? `<div class="mt-1 text-neutral-600">${escapeHtml(a.rootCause.summary)}</div><div class="mt-1 text-[10px] text-neutral-400">confidence ${(a.confidence * 100).toFixed(0)}% · ${a.escalate ? 'ESCALATED' : 'auto'} · ${escapeHtml(modeTag)}</div>${fixesHtml}` : ''}</div>`;
       }).join('');
     } catch (e) { /* ignore */ }
   }

@@ -29,7 +29,7 @@ export function makeConnectorClient(cfg = defaultConfig) {
 }
 
 export function createInvestigator(deps) {
-  const { store, investigateDependencies, inspectCodebase, reason, notifyEngineer, config, services } = deps;
+  const { store, investigateDependencies, inspectCodebase, reason, notifyEngineer, config, services = defaultServices } = deps;
 
   function decideEscalation(incident, result, findings, connectorError, recurring) {
     const reasons = [];
@@ -55,16 +55,33 @@ export function createInvestigator(deps) {
     const { escalate, escalationReason } = decideEscalation(incident, result, dependencyFindings, dependency.error, recurring);
 
     const analysis = {
-      incidentId: incident.id, mode: result.mode, severity: result.severity, summary: result.summary,
-      rootCause: result.rootCause, suggestedFixes: result.suggestedFixes, dependencyFindings, codeFindings,
-      confidence: result.confidence, escalate, escalationReason, reasoning: result.reasoning, recurring,
-      recentCommits, repoUrl,
+      incidentId: incident.id,
+      mode: result.mode,
+      ...(result.degradedFromLive ? { degradedFromLive: true, fallbackReason: result.fallbackReason } : {}),
+      severity: result.severity,
+      summary: result.summary,
+      rootCause: result.rootCause,
+      suggestedFixes: result.suggestedFixes,
+      dependencyFindings,
+      codeFindings,
+      confidence: result.confidence,
+      escalate,
+      escalationReason,
+      reasoning: result.reasoning,
+      evidenceGraph: result.evidenceGraph,
+      recurring,
+      recentCommits,
+      repoUrl,
       policy: { dryRun: config.DRY_RUN, autoRollback: config.AUTO_ROLLBACK, escalationThreshold: config.ESCALATION_CONFIDENCE_THRESHOLD },
       monitoringActive: config.MONITORING_ACTIVE,
       createdAt: new Date().toISOString()
     };
     store.attachAnalysis(incident.id, analysis);
-    log("info", "incident_analyzed", { incidentId: incident.id, mode: analysis.mode, severity: analysis.severity, confidence: analysis.confidence, escalate });
+    log("info", "incident_analyzed", {
+      incidentId: incident.id, mode: analysis.mode,
+      ...(analysis.degradedFromLive ? { degradedFromLive: true, fallbackReason: analysis.fallbackReason } : {}),
+      severity: analysis.severity, confidence: analysis.confidence, escalate
+    });
 
     if (escalate) {
       const notification = await notifyEngineer(incident, analysis, escalationReason || "escalation policy");

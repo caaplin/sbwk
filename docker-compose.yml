@@ -58,7 +58,7 @@ services:
       NOTIFICATION_WEBHOOK_URL: ${NOTIFICATION_WEBHOOK_URL:-}
       DATA_DIR: /data
     volumes:
-      - ./:/codebase:ro
+      - ${TARGET_CODEBASE_PATH:-./services/dummy-server}:/codebase:ro
       - agent-core-data:/data
     depends_on:
       - agent-connector
@@ -88,6 +88,9 @@ services:
       CONNECTOR_API_TOKEN: ${CONNECTOR_API_TOKEN}
       AGENT_CORE_URL: http://agent-core:4200
       AGENT_CORE_TOKEN: ${AGENT_CORE_TOKEN}
+      CONTROL_PLANE_TOKEN: ${CONTROL_PLANE_TOKEN:-}
+      CONTROL_PLANE_SECRET: ${CONTROL_PLANE_SECRET:-}
+      BLOCK_PRIVATE_NETWORKS: ${BLOCK_PRIVATE_NETWORKS:-false}
       DEFAULT_TARGET_URL: http://server:8000
       DATA_DIR: /data
     volumes:

@@ -19,6 +19,19 @@ const metrics = {
 };
 
 export function mockCheck(service, check) {
+  if (!health[service] || !["health", "metrics", "logs"].includes(check)) {
+    return {
+      service,
+      check,
+      status: "unknown",
+      observedAt: now(),
+      source: `mock.${service}.${check}`,
+      evidence: [],
+      error: { code: "INVALID_ARGUMENTS", message: `Unsupported mock check: ${service}.${check}` },
+      durationMs: 0
+    };
+  }
+
   const observedAt = now();
   const scenario = getMockScenario();
   let data, status = "unknown", evidence = [];

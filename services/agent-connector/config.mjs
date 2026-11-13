@@ -10,13 +10,36 @@ try {
 } catch { /* no .env — use process.env */ }
 
 const env = process.env;
-const num = (v, d) => (Number.isFinite(Number(v)) ? Number(v) : d);
-const str = (v, d) => (v && v.trim() ? v : d);
+const num = (v, d) => (v !== undefined && v !== "" && Number.isFinite(Number(v)) ? Number(v) : d);
+const str = (v, d) => (v && v.trim() ? v.trim() : d);
+
+export function isWeakToken(token) {
+  if (typeof token !== "string" || token.length < 32) return true;
+  const lower = token.toLowerCase();
+  if (
+    lower.startsWith("development-only") ||
+    lower.startsWith("replace-with") ||
+    lower.startsWith("replace-this") ||
+    lower.includes("changeme") ||
+    lower.includes("example")
+  ) return true;
+  if (new Set(token).size < 6) return true;
+  return false;
+}
 
 function integration(prefix, defHealth, defMetrics, defLogs) {
+  const rawBase = str(env[`${prefix}_BASE_URL`], undefined);
+  const rawTcp = str(env[`${prefix}_TCP_ENDPOINT`], undefined);
+  let baseUrl = rawBase;
+  let tcpEndpoint = rawTcp;
+  if (rawBase && !/^https?:\/\//i.test(rawBase)) {
+    baseUrl = undefined;
+    tcpEndpoint = tcpEndpoint || rawBase;
+  }
   return {
-    baseUrl: str(env[`${prefix}_BASE_URL`], undefined),
-    token: str(env[`${prefix}_API_TOKEN`], undefined),
+    baseUrl,
+    tcpEndpoint,
+    token: str(env[`${prefix}_API_TOKEN`], str(env[`${prefix}_TOKEN`], undefined)),
     paths: {
       health: str(env[`${prefix}_HEALTH_PATH`], defHealth),
       metrics: str(env[`${prefix}_METRICS_PATH`], defMetrics),
@@ -31,7 +54,8 @@ export const config = {
   CONNECTOR_API_TOKEN: str(env.CONNECTOR_API_TOKEN, "development-only-change-this-token-123456"),
   CONNECTOR_MODE: env.CONNECTOR_MODE === "live" ? "live" : "mock",
   REQUEST_TIMEOUT_MS: num(env.REQUEST_TIMEOUT_MS, 4000),
-  MAX_BATCH_CONCURRENCY: Math.min(num(env.MAX_BATCH_CONCURRENCY, 4), 12),
+  RATE_LIMIT_PER_MIN: num(env.RATE_LIMIT_PER_MIN, 180),
+  MAX_BATCH_CONCURRENCY: Math.min(Math.max(1, num(env.MAX_BATCH_CONCURRENCY, 4)), 12),
   services: {
     database: integration("DATABASE", "/internal/health", "/internal/metrics", "/internal/logs"),
     auth: integration("AUTH", "/internal/health", "/internal/metrics", "/internal/logs"),
@@ -39,7 +63,7 @@ export const config = {
   }
 };
 
-if (config.NODE_ENV === "production" && config.CONNECTOR_API_TOKEN.startsWith("development-only")) {
-  console.error("Set a unique CONNECTOR_API_TOKEN before production.");
+if (config.NODE_ENV === "production" && isWeakToken(config.CONNECTOR_API_TOKEN)) {
+  console.error("Set a strong unique CONNECTOR_API_TOKEN (>= 32 high-entropy chars) before production.");
   process.exit(1);
 }
